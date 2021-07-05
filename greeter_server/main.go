@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	pb "github.com/nbtvu/giapici/greeter"
 	"google.golang.org/grpc"
+	"io"
 	"log"
 	"net"
 )
@@ -12,14 +12,29 @@ type greeterServer struct {
 	pb.UnimplementedGreeterServer
 }
 
-func (s *greeterServer) Counter(ctx context.Context, request *pb.CounterRequest) (*pb.CounterResponse, error) {
-	log.Printf("Received: %v", request.GetNum())
-	return &pb.CounterResponse{
-		ResNum: -request.GetNum(),
-		Ip: "not-implemented",
-	}, nil
-}
+func (s *greeterServer) Counter(stream pb.Greeter_CounterServer) error {
+	log.Println("Counter function")
+	count := 0
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			// Close the connection and return the response to the client
+			return stream.SendAndClose(&pb.CounterResponse{
+				ResNum: int64(count),
+				Ip: "not-implemented",
+			})
+		}
 
+		if err != nil {
+			log.Fatalf("Error when reading client request stream: %v", err)
+		}
+
+		num := req.GetNum()
+		log.Println("Received counter with num: ", num)
+		count++
+	}
+	return nil
+}
 
 func main()  {
 	lis, err := net.Listen("tcp",":8800")

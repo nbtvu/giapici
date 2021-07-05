@@ -4,7 +4,7 @@ option go_package = "github.com/nbtvu/giapici/greeter";
 
 // The greeting service definition.
 service Greeter {
-  rpc Counter (CounterRequest) returns (CounterResponse) {}
+  rpc Counter (stream CounterRequest) returns (CounterResponse) {}
 
 }
 

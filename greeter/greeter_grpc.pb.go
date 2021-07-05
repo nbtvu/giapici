@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GreeterClient interface {
-	Counter(ctx context.Context, in *CounterRequest, opts ...grpc.CallOption) (*CounterResponse, error)
+	Counter(ctx context.Context, opts ...grpc.CallOption) (Greeter_CounterClient, error)
 }
 
 type greeterClient struct {
@@ -29,20 +29,45 @@ func NewGreeterClient(cc grpc.ClientConnInterface) GreeterClient {
 	return &greeterClient{cc}
 }
 
-func (c *greeterClient) Counter(ctx context.Context, in *CounterRequest, opts ...grpc.CallOption) (*CounterResponse, error) {
-	out := new(CounterResponse)
-	err := c.cc.Invoke(ctx, "/Greeter/Counter", in, out, opts...)
+func (c *greeterClient) Counter(ctx context.Context, opts ...grpc.CallOption) (Greeter_CounterClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Greeter_ServiceDesc.Streams[0], "/Greeter/Counter", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &greeterCounterClient{stream}
+	return x, nil
+}
+
+type Greeter_CounterClient interface {
+	Send(*CounterRequest) error
+	CloseAndRecv() (*CounterResponse, error)
+	grpc.ClientStream
+}
+
+type greeterCounterClient struct {
+	grpc.ClientStream
+}
+
+func (x *greeterCounterClient) Send(m *CounterRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *greeterCounterClient) CloseAndRecv() (*CounterResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(CounterResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // GreeterServer is the server API for Greeter service.
 // All implementations must embed UnimplementedGreeterServer
 // for forward compatibility
 type GreeterServer interface {
-	Counter(context.Context, *CounterRequest) (*CounterResponse, error)
+	Counter(Greeter_CounterServer) error
 	mustEmbedUnimplementedGreeterServer()
 }
 
@@ -50,8 +75,8 @@ type GreeterServer interface {
 type UnimplementedGreeterServer struct {
 }
 
-func (UnimplementedGreeterServer) Counter(context.Context, *CounterRequest) (*CounterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Counter not implemented")
+func (UnimplementedGreeterServer) Counter(Greeter_CounterServer) error {
+	return status.Errorf(codes.Unimplemented, "method Counter not implemented")
 }
 func (UnimplementedGreeterServer) mustEmbedUnimplementedGreeterServer() {}
 
@@ -66,22 +91,30 @@ func RegisterGreeterServer(s grpc.ServiceRegistrar, srv GreeterServer) {
 	s.RegisterService(&Greeter_ServiceDesc, srv)
 }
 
-func _Greeter_Counter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CounterRequest)
-	if err := dec(in); err != nil {
+func _Greeter_Counter_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GreeterServer).Counter(&greeterCounterServer{stream})
+}
+
+type Greeter_CounterServer interface {
+	SendAndClose(*CounterResponse) error
+	Recv() (*CounterRequest, error)
+	grpc.ServerStream
+}
+
+type greeterCounterServer struct {
+	grpc.ServerStream
+}
+
+func (x *greeterCounterServer) SendAndClose(m *CounterResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *greeterCounterServer) Recv() (*CounterRequest, error) {
+	m := new(CounterRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(GreeterServer).Counter(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/Greeter/Counter",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GreeterServer).Counter(ctx, req.(*CounterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 // Greeter_ServiceDesc is the grpc.ServiceDesc for Greeter service.
@@ -90,12 +123,13 @@ func _Greeter_Counter_Handler(srv interface{}, ctx context.Context, dec func(int
 var Greeter_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "Greeter",
 	HandlerType: (*GreeterServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "Counter",
-			Handler:    _Greeter_Counter_Handler,
+			StreamName:    "Counter",
+			Handler:       _Greeter_Counter_Handler,
+			ClientStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "greeter/greeter.proto",
 }
