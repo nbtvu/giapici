@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "github.com/nbtvu/giapici/greeter";
+
+// The greeting service definition.
+service Greeter {
+  rpc Counter (CounterRequest) returns (CounterResponse) {}
+
+}
+
+message CounterRequest {
+  int64 num = 1;
+}
+
+message CounterResponse {
+  int64 res_num = 1;
+  string ip = 2;
+}
